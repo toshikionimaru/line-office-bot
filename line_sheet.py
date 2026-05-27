@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 import re
-import os     # 💡 เพิ่มบรรทัดนี้เข้าไปครับ
-import json   # 💡 เพิ่มบรรทัดนี้ไปด้วยเพื่อให้ถอดรหัสคีย์กูเกิลผ่าน
+import os     
+import json   
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
@@ -22,8 +22,9 @@ from linebot.v3.messaging import (
     TextMessage
 )
 
-# Background Task Scheduler
+# Background Task Scheduler + Timezone Support
 from apscheduler.schedulers.background import BackgroundScheduler
+from pytz import timezone
 
 # ==========================================
 # CONFIG
@@ -87,8 +88,8 @@ try:
     print("GOOGLE SHEET CONNECTED ✔")
 except Exception as e:
     print("GOOGLE SHEET ERROR ❌\n", e)
-    # ตัดคำสั่ง input() ออกเพื่อไม่ให้บอทค้างคราวด์
     exit(1)
+
 # ==========================================
 # FUNCTION: ระบบแจ้งเตือนอัตโนมัติ (Reminders)
 # ==========================================
@@ -143,7 +144,8 @@ def send_daily_summary():
         if not all_records:
             return
 
-        now = datetime.now()
+        # ปรับเวลาให้เป็นโซนไทย ป้องกันเซิร์ฟเวอร์ Cloud ตลบหลังเรื่องวันที่
+        now = datetime.now(timezone('Asia/Bangkok'))
         thai_year_short = str(now.year + 543)[-2:] 
         today_str = f"{now.day}/{now.month}/{thai_year_short}"
         
@@ -167,9 +169,11 @@ def send_daily_summary():
                 
                 if name and task:
                     has_data = True
+                    
+                    # 💡 จุดแก้ไขที่ 1: ปรับแก้ตรงนี้ให้จับชื่อ Match เป๊ะๆ ไม่ให้ ชญาดา หลุดไปกราฟฟิก
                     dept = "อื่น ๆ"
                     for k, v in DEPARTMENT_MAPPING.items():
-                        if k in name or name in k:
+                        if k.strip() == name:
                             dept = v
                             break
                     
@@ -200,10 +204,11 @@ def send_daily_summary():
         print(f"❌ สรุปผิดพลาด: {e}")
 
 # ==========================================
-# SET UP SCHEDULER (ตั้งเวลาทำงาน "ทุกวัน")
+# SET UP SCHEDULER (บังคับจิ้มเป็นเวลาประเทศไทย)
 # ==========================================
 
-scheduler = BackgroundScheduler(daemon=True)
+tz = timezone('Asia/Bangkok')
+scheduler = BackgroundScheduler(daemon=True, timezone=tz)
 
 scheduler.add_job(send_morning_reminder, 'cron', hour=8, minute=10)
 scheduler.add_job(send_evening_reminder, 'cron', hour=16, minute=50)
@@ -226,7 +231,7 @@ def callback():
     return "OK"
 
 # ==========================================
-# HANDLE MESSAGE & PARSER (จัดกลุ่มแยกแผนกจบในบล็อกเดียว)
+# HANDLE MESSAGE & PARSER 
 # ==========================================
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -268,9 +273,12 @@ def handle_message(event):
                     task_text = line_str.replace("-", "", 1).strip()
                     sheet_rows.append([work_date, current_name, task_text])
                     
+                    # 💡 จุดแก้ไขที่ 2: ปรับเช็กชื่อแบบสมบูรณ์พูนสุข (==) ตัดปัญหาชื่อซ้อนทับกัน
                     assigned_dept = "อื่น ๆ"
+                    clean_current_name = current_name.strip()
+                    
                     for emp_name, dept_name in DEPARTMENT_MAPPING.items():
-                        if emp_name in current_name or current_name in emp_name:
+                        if emp_name.strip() == clean_current_name:
                             assigned_dept = dept_name
                             break
                     
