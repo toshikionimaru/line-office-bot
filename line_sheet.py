@@ -1,5 +1,7 @@
 from flask import Flask, request, abort
 import re
+import os     # 💡 เพิ่มบรรทัดนี้เข้าไปครับ
+import json   # 💡 เพิ่มบรรทัดนี้ไปด้วยเพื่อให้ถอดรหัสคีย์กูเกิลผ่าน
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
