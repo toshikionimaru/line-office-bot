@@ -69,16 +69,24 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 try:
-    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON, scope)
+    google_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    
+    if google_creds_json:
+        # ถ้ารันบน Cloud และเจอคีย์ความลับ ให้ถอดรหัสอ่านค่าทันที
+        creds_dict = json.loads(google_creds_json)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        # ป้องกันบอทค้างตอนเปิดบน Cloud: ถ้าไม่เจอคีย์ให้แจ้งเตือนตรง ๆ ไม่ต้องสั่งรอปุ่ม Enter
+        raise FileNotFoundError("ไม่พบข้อมูลคีย์ GOOGLE_CREDENTIALS_JSON ในระบบ Environment Variables ของ Cloud ครับ")
+        
     client = gspread.authorize(creds)
     spreadsheet = client.open(SPREADSHEET_NAME)
     sheet = spreadsheet.worksheet(WORKSHEET_NAME)
     print("GOOGLE SHEET CONNECTED ✔")
 except Exception as e:
     print("GOOGLE SHEET ERROR ❌\n", e)
-    input("Press Enter to Exit...")
-    exit()
-
+    # ตัดคำสั่ง input() ออกเพื่อไม่ให้บอทค้างคราวด์
+    exit(1)
 # ==========================================
 # FUNCTION: ระบบแจ้งเตือนอัตโนมัติ (Reminders)
 # ==========================================
