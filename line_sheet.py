@@ -35,7 +35,7 @@ CHANNEL_ACCESS_TOKEN = "cve00KYaRV/u02SyxIOyO1tTSTBxyderSe2Asq7UkO9jVYjrstPVfjtZ
 CHANNEL_SECRET = "c900eed30a1caff2ce1e1350fcb5da96"
 
 # ลบการล็อกไอดีถาวรออกแล้ว เพื่อให้บอทเริ่มดักจับไอดีห้องใหม่อัตโนมัติจากข้อความ
-TARGET_CHAT_ID = None 
+TARGET_CHAT_ID = "C4537b26bab93b8b27236efbf6963d27a"
 
 # 💡 บัญชีรายชื่อพนักงานและแผนกหลัก
 DEPARTMENT_MAPPING = {
