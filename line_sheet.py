@@ -34,8 +34,8 @@ from pytz import timezone
 CHANNEL_ACCESS_TOKEN = "cve00KYaRV/u02SyxIOyO1tTSTBxyderSe2Asq7UkO9jVYjrstPVfjtZKsoMbZ7PU3trkWUYhufZpN9f8ah8+pT/d420hnuIdr2ywgXokYlaKyht5VgvQuOZ0OognvlocC42kg096CjOylcqCeIjiAdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "c900eed30a1caff2ce1e1350fcb5da96"
 
-# ลบการล็อกไอดีถาวรออกแล้ว เพื่อให้บอทเริ่มดักจับไอดีห้องใหม่อัตโนมัติจากข้อความ
-TARGET_CHAT_ID = "C4537b26bab93b8b27236efbf6963d27a"
+# 🔒 ล็อก Group ID ของกลุ่มไลน์เรียบร้อยแล้วเพื่อความเสถียรสูงสุด
+TARGET_CHAT_ID = "C4537b26bab93b8b27236efbf6963d27a" 
 
 # 💡 บัญชีรายชื่อพนักงานและแผนกหลัก
 DEPARTMENT_MAPPING = {
@@ -86,7 +86,7 @@ try:
         if os.path.exists(GOOGLE_JSON_PATH):
             creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON_PATH, scope)
         else:
-            raise FileNotFoundError("ไม่พบข้อมูลคีย์คลาวด์หรือพาร์ทไฟล์ในเครื่องคอมพิวSERVERครับ")
+            raise FileNotFoundError("ไม่พบข้อมูลคีย์คลาวด์หรือพาร์ทไฟล์ในเครื่องคอมพิวเตอร์ครับ")
         
     client = gspread.authorize(creds)
     spreadsheet = client.open(SPREADSHEET_NAME)
@@ -249,7 +249,7 @@ def handle_message(event):
     global TARGET_CHAT_ID, sheet
     msg = event.message.text.strip()
 
-    # 🌟 วิธีที่ 2: ระบบตรวจเช็คไอดีห้องแชทผ่าน LINE โดยตรง
+    # 🌟 ฟังก์ชันพิเศษ 1: ตรวจสอบไอดีกลุ่มแชท
     if msg == "เช็คไอดีห้อง":
         current_id = "ไม่มีไอดีกลุ่ม (อาจเป็นแชทส่วนตัว)"
         if hasattr(event.source, 'group_id'):
@@ -269,6 +269,54 @@ def handle_message(event):
             )
         return
 
+    # 🌟 ฟังก์ชันพิเศษ 2: คำสั่ง "วิธีเข้าแนส" / "วิธีเข้า nas"
+    if msg.lower() in ["วิธีเข้าแนส", "วิธีเข้า nas"]:
+        nas_reply = (
+            "📁 วิธีการเข้าใช้งาน NAS ประจำออฟฟิศ\n\n"
+            "🌐 เข้าใช้งานผ่านลิงก์เว็บอินเทอร์เน็ต:\n"
+            "เข้าผ่าน https://quickconnect.to/dataft\n"
+            "👤 User: graphic\n"
+            "🔑 Pass: 0XEWb9&f\n\n"
+            "📶 หรือเข้าผ่านโครงข่าย Wi-Fi ออฟฟิศ:\n"
+            "สร้าง shortcut บล็อกพาร์ท: \\\\data_ft\n"
+            "👤 User: graphic\n"
+            "🔑 Pass: 0XEWb9&f"
+        )
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=nas_reply)])
+            )
+        return
+
+    # 🌟 ฟังก์ชันพิเศษ 3: เพิ่มคำสั่ง "ขอwifi"
+    if msg.lower() == "ขอwifi":
+        wifi_reply = (
+            "📶 ข้อมูล Wi-Fi ออฟฟิศ\n\n"
+            "📛 ชื่อ Wi-Fi: FT_IT\n"
+            "🔑 รหัสผ่าน: 88888888"
+        )
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=wifi_reply)])
+            )
+        return
+
+    # 🌟 ฟังก์ชันพิเศษ 4: เพิ่มคำสั่ง "ขอtiktok"
+    if msg.lower() == "ขอtiktok":
+        tiktok_reply = (
+            "🎬 ข้อมูลบัญชี TikTok ออฟฟิศ\n\n"
+            "👤 User: info1@fountaintreeresort.com\n"
+            "🔑 Pass: Farmmraf@2568"
+        )
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=tiktok_reply)])
+            )
+        return
+
     # --- ระบบประมวลผลบันทึกรายงานปกติ ---
     lines = msg.splitlines()
     if not lines:
@@ -282,13 +330,11 @@ def handle_message(event):
         return
     work_date = date_match.group(1).strip()
 
-    # ดักจับไอดีกลุ่มอัตโนมัติเมื่อมีคนพิมพ์ส่งแผนงานเข้ามา
     if hasattr(event.source, 'group_id'):
         TARGET_CHAT_ID = event.source.group_id
     elif hasattr(event.source, 'room_id'):
         TARGET_CHAT_ID = event.source.room_id
 
-    # ตรวจสอบการเชื่อมต่อ Google Sheet สำรอง
     if sheet is None:
         try:
             google_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
