@@ -34,7 +34,7 @@ from pytz import timezone
 CHANNEL_ACCESS_TOKEN = "cve00KYaRV/u02SyxIOyO1tTSTBxyderSe2Asq7UkO9jVYjrstPVfjtZKsoMbZ7PU3trkWUYhufZpN9f8ah8+pT/d420hnuIdr2ywgXokYlaKyht5VgvQuOZ0OognvlocC42kg096CjOylcqCeIjiAdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "c900eed30a1caff2ce1e1350fcb5da96"
 
-# บอทจะจำไอดีกลุ่มโดยอัตโนมัติจากการพิมพ์ข้อความเข้ามาครั้งแรก
+# ลบการล็อกไอดีถาวรออกแล้ว เพื่อให้บอทเริ่มดักจับไอดีห้องใหม่อัตโนมัติจากข้อความ
 TARGET_CHAT_ID = None 
 
 # 💡 บัญชีรายชื่อพนักงานและแผนกหลัก
@@ -86,7 +86,7 @@ try:
         if os.path.exists(GOOGLE_JSON_PATH):
             creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON_PATH, scope)
         else:
-            raise FileNotFoundError("ไม่พบข้อมูลคีย์คลาวด์หรือพาร์ทไฟล์ในเครื่องคอมพิวเตอร์ครับ")
+            raise FileNotFoundError("ไม่พบข้อมูลคีย์คลาวด์หรือพาร์ทไฟล์ในเครื่องคอมพิวSERVERครับ")
         
     client = gspread.authorize(creds)
     spreadsheet = client.open(SPREADSHEET_NAME)
@@ -248,8 +248,29 @@ def callback():
 def handle_message(event):
     global TARGET_CHAT_ID, sheet
     msg = event.message.text.strip()
-    lines = msg.splitlines()
 
+    # 🌟 วิธีที่ 2: ระบบตรวจเช็คไอดีห้องแชทผ่าน LINE โดยตรง
+    if msg == "เช็คไอดีห้อง":
+        current_id = "ไม่มีไอดีกลุ่ม (อาจเป็นแชทส่วนตัว)"
+        if hasattr(event.source, 'group_id'):
+            current_id = event.source.group_id
+        elif hasattr(event.source, 'room_id'):
+            current_id = event.source.room_id
+            
+        reply_text = f"🆔 ไอดีของห้องแชทนี้คือ:\n{current_id}"
+        
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
+        return
+
+    # --- ระบบประมวลผลบันทึกรายงานปกติ ---
+    lines = msg.splitlines()
     if not lines:
         return
 
@@ -261,15 +282,13 @@ def handle_message(event):
         return
     work_date = date_match.group(1).strip()
 
-    # ดักจับไอดีกลุ่มแชทโดยอัตโนมัติ เพื่อนำไปใช้กับระบบแจ้งเตือนตั้งเวลา
+    # ดักจับไอดีกลุ่มอัตโนมัติเมื่อมีคนพิมพ์ส่งแผนงานเข้ามา
     if hasattr(event.source, 'group_id'):
         TARGET_CHAT_ID = event.source.group_id
     elif hasattr(event.source, 'room_id'):
         TARGET_CHAT_ID = event.source.room_id
-    elif hasattr(event.source, 'user_id'):
-        TARGET_CHAT_ID = event.source.user_id
 
-    # เผื่อกรณีการเชื่อมต่อ Google Sheet หลุดก่อนหน้า ระบบจะพยายามเชื่อมใหม่ให้อัตโนมัติ
+    # ตรวจสอบการเชื่อมต่อ Google Sheet สำรอง
     if sheet is None:
         try:
             google_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
