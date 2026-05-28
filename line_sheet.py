@@ -2,6 +2,7 @@ from flask import Flask, request, abort
 import re
 import os     
 import json   
+import time
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
@@ -33,6 +34,7 @@ from pytz import timezone
 CHANNEL_ACCESS_TOKEN = "cve00KYaRV/u02SyxIOyO1tTSTBxyderSe2Asq7UkO9jVYjrstPVfjtZKsoMbZ7PU3trkWUYhufZpN9f8ah8+pT/d420hnuIdr2ywgXokYlaKyht5VgvQuOZ0OognvlocC42kg096CjOylcqCeIjiAdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "c900eed30a1caff2ce1e1350fcb5da96"
 
+# บอทจะจำไอดีกลุ่มโดยอัตโนมัติจากการพิมพ์ข้อความเข้ามาครั้งแรก
 TARGET_CHAT_ID = None 
 
 # 💡 บัญชีรายชื่อพนักงานและแผนกหลัก
@@ -58,7 +60,6 @@ DEPT_ICONS = {
     "อื่น ๆ": "❓ อื่นๆ/ไม่ระบุแผนก"
 }
 
-GOOGLE_JSON = r"C:\Users\Graphic Head\Desktop\proj\annular-fold-420003-6b9d58cd215a.json"
 SPREADSHEET_NAME = "LINE Office Log"
 WORKSHEET_NAME = "งานประจำวัน"
 
@@ -71,16 +72,21 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 # ==========================================
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+sheet = None
+
 try:
     google_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     
     if google_creds_json:
-        # ถ้ารันบน Cloud และเจอคีย์ความลับ ให้ถอดรหัสอ่านค่าทันที
         creds_dict = json.loads(google_creds_json)
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     else:
-        # ป้องกันบอทค้างตอนเปิดบน Cloud: ถ้าไม่เจอคีย์ให้แจ้งเตือนตรง ๆ ไม่ต้องสั่งรอปุ่ม Enter
-        raise FileNotFoundError("ไม่พบข้อมูลคีย์ GOOGLE_CREDENTIALS_JSON ในระบบ Environment Variables ของ Cloud ครับ")
+        # สำหรับกรณีทดสอบบนเครื่อง Local ผ่านไฟล์ตรงๆ
+        GOOGLE_JSON_PATH = r"C:\Users\Graphic Head\Desktop\proj\annular-fold-420003-6b9d58cd215a.json"
+        if os.path.exists(GOOGLE_JSON_PATH):
+            creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON_PATH, scope)
+        else:
+            raise FileNotFoundError("ไม่พบข้อมูลคีย์คลาวด์หรือพาร์ทไฟล์ในเครื่องคอมพิวเตอร์ครับ")
         
     client = gspread.authorize(creds)
     spreadsheet = client.open(SPREADSHEET_NAME)
@@ -88,17 +94,15 @@ try:
     print("GOOGLE SHEET CONNECTED ✔")
 except Exception as e:
     print("GOOGLE SHEET ERROR ❌\n", e)
-    exit(1)
 
 # ==========================================
 # FUNCTION: ระบบแจ้งเตือนอัตโนมัติ (Reminders)
 # ==========================================
 
-# 1. เตือนรอบเช้า 08:10 น. (ทุกวัน)
 def send_morning_reminder():
     print("⏰ เริ่มทำงาน: แจ้งเตือนส่งแผนงานรอบเช้า")
     if TARGET_CHAT_ID is None:
-        print("❌ ยังไม่มี Target Chat ID (ต้องรอให้มีคนพิมพ์ในกลุ่มก่อนอย่างน้อย 1 ครั้ง)")
+        print("❌ ปฏิเสธการส่ง: ยังไม่มีข้อมูลไอดีปลายทางเป้าหมาย (TARGET_CHAT_ID)")
         return
     try:
         with ApiClient(configuration) as api_client:
@@ -112,11 +116,10 @@ def send_morning_reminder():
     except Exception as e:
         print(f"❌ เตือนรอบเช้าผิดพลาด: {e}")
 
-# 2. เตือนรอบเย็น 16:50 น. (ทุกวัน)
 def send_evening_reminder():
     print("⏰ เริ่มทำงาน: แจ้งเตือนส่งสรุปงานรอบเย็น")
     if TARGET_CHAT_ID is None:
-        print("❌ ยังไม่มี Target Chat ID")
+        print("❌ ปฏิเสธการส่ง: ยังไม่มีข้อมูลไอดีปลายทางเป้าหมาย (TARGET_CHAT_ID)")
         return
     try:
         with ApiClient(configuration) as api_client:
@@ -136,7 +139,8 @@ def send_evening_reminder():
 
 def send_daily_summary():
     print("⏰ เริ่มทำงาน: ฟังก์ชันส่งสรุปประจำวันอัตโนมัติ")
-    if TARGET_CHAT_ID is None:
+    if TARGET_CHAT_ID is None or sheet is None:
+        print("❌ ปฏิเสธการส่งสรุปประจำวัน: ข้อมูลสเปรดชีตหรือไอดีปลายทางไม่พร้อม")
         return
         
     try:
@@ -144,7 +148,6 @@ def send_daily_summary():
         if not all_records:
             return
 
-        # ปรับเวลาให้เป็นโซนไทย ป้องกันเซิร์ฟเวอร์ Cloud ตลบหลังเรื่องวันที่
         now = datetime.now(timezone('Asia/Bangkok'))
         thai_year_short = str(now.year + 543)[-2:] 
         today_str = f"{now.day}/{now.month}/{thai_year_short}"
@@ -169,8 +172,6 @@ def send_daily_summary():
                 
                 if name and task:
                     has_data = True
-                    
-                    # 💡 จุดแก้ไขที่ 1: ปรับแก้ตรงนี้ให้จับชื่อ Match เป๊ะๆ ไม่ให้ ชญาดา หลุดไปกราฟฟิก
                     dept = "อื่น ๆ"
                     for k, v in DEPARTMENT_MAPPING.items():
                         if k.strip() == name:
@@ -204,17 +205,26 @@ def send_daily_summary():
         print(f"❌ สรุปผิดพลาด: {e}")
 
 # ==========================================
-# SET UP SCHEDULER (บังคับจิ้มเป็นเวลาประเทศไทย)
+# SET UP SCHEDULER (ระบบล็อกโซนเวลาประเทศไทยสำหรับ Gunicorn/Render)
 # ==========================================
 
-tz = timezone('Asia/Bangkok')
-scheduler = BackgroundScheduler(daemon=True, timezone=tz)
+os.environ['TZ'] = 'Asia/Bangkok'
+if hasattr(time, 'tzset'):
+    time.tzset()
 
-scheduler.add_job(send_morning_reminder, 'cron', hour=8, minute=10)
-scheduler.add_job(send_evening_reminder, 'cron', hour=16, minute=50)
-scheduler.add_job(send_daily_summary, 'cron', hour=17, minute=0)
+tz = timezone('Asia/Bangkok')
+scheduler = BackgroundScheduler(
+    daemon=True, 
+    timezone=tz,
+    job_defaults={'misfire_grace_time': 3600}
+)
+
+scheduler.add_job(send_morning_reminder, 'cron', hour=8, minute=10, timezone=tz)
+scheduler.add_job(send_evening_reminder, 'cron', hour=16, minute=50, timezone=tz)
+scheduler.add_job(send_daily_summary, 'cron', hour=17, minute=0, timezone=tz)
 
 scheduler.start()
+print("🎯 SYSTEM SCHEDULER STARTED WITH ASIA/BANGKOK TIMEZONE ✔")
 
 # ==========================================
 # WEBHOOK RECEIVER
@@ -236,7 +246,7 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    global TARGET_CHAT_ID 
+    global TARGET_CHAT_ID, sheet
     msg = event.message.text.strip()
     lines = msg.splitlines()
 
@@ -251,10 +261,25 @@ def handle_message(event):
         return
     work_date = date_match.group(1).strip()
 
+    # ดักจับไอดีกลุ่มแชทโดยอัตโนมัติ เพื่อนำไปใช้กับระบบแจ้งเตือนตั้งเวลา
     if hasattr(event.source, 'group_id'):
         TARGET_CHAT_ID = event.source.group_id
+    elif hasattr(event.source, 'room_id'):
+        TARGET_CHAT_ID = event.source.room_id
     elif hasattr(event.source, 'user_id'):
         TARGET_CHAT_ID = event.source.user_id
+
+    # เผื่อกรณีการเชื่อมต่อ Google Sheet หลุดก่อนหน้า ระบบจะพยายามเชื่อมใหม่ให้อัตโนมัติ
+    if sheet is None:
+        try:
+            google_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+            if google_creds_json:
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(google_creds_json), scope)
+                client = gspread.authorize(creds)
+                sheet = client.open(SPREADSHEET_NAME).worksheet(WORKSHEET_NAME)
+        except Exception as sheet_err:
+            print("❌ ไม่สามารถดึงข้อมูลสเปรดชีตซ้ำได้:", sheet_err)
+            return
 
     try:
         reply_dept = {"กราฟฟิก": [], "การตลาด": [], "ไอที": [], "อื่น ๆ": []}
@@ -273,7 +298,6 @@ def handle_message(event):
                     task_text = line_str.replace("-", "", 1).strip()
                     sheet_rows.append([work_date, current_name, task_text])
                     
-                    # 💡 จุดแก้ไขที่ 2: ปรับเช็กชื่อแบบสมบูรณ์พูนสุข (==) ตัดปัญหาชื่อซ้อนทับกัน
                     assigned_dept = "อื่น ๆ"
                     clean_current_name = current_name.strip()
                     
