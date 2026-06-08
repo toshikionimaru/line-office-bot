@@ -36,8 +36,8 @@ CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "c900eed30a1caff2ce1e1350
 TARGET_CHAT_ID = "C4537b26bab93b8b27236efbf6963d27a"
 
 DEPARTMENT_MAPPING = {
-    "อารยา": "กราฟฟิก", "ญาดา": "กราฟฟิก", "เพชรลดา": "กราฟฟิก",
-    "ชญาดา": "การตลาด", "ธนภัทร": "การตลาด",    
+    "อารยา": "กราฟฟิก", "ญาดา": "กราฟฟิก", "สุรยุทธ์": "กราฟฟิก",
+    "ชญาดา": "การตลาด", "ธนภัทร": "การตลาด", "พัลลภา": "การตลาด",    
     "ศุกภรัตน์": "ไอที", "วราภรณ์": "ไอที", "ธนกร": "ไอที", "อัฑฒ์นิรุช": "ไอที", "อภิวัฒน์": "ไอที"
 }
 
@@ -166,14 +166,60 @@ def handle_message(event):
     global TARGET_CHAT_ID
     msg = event.message.text.strip()
 
-    # ฟังก์ชันคำสั่งพิเศษ
+    # 🌟 ฟังก์ชันคำสั่งพิเศษ 1: เช็คไอดีห้อง
     if msg == "เช็คไอดีห้อง":
         cid = getattr(event.source, 'group_id', getattr(event.source, 'room_id', "N/A"))
         with ApiClient(configuration) as api_client:
             MessagingApi(api_client).reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=f"🆔 ไอดีห้อง: {cid}")]))
         return
 
-    # ระบบบันทึกงาน
+    # 🌟 ฟังก์ชันคำสั่งพิเศษ 2: วิธีเข้าแนส / วิธีเข้า nas / ขอแนส
+    if msg.lower() in ["วิธีเข้าแนส", "วิธีเข้า nas", "ขอแนส"]:
+        nas_reply = (
+            "📁 วิธีการเข้าใช้งาน NAS ประจำออฟฟิศ\n\n"
+            "🌐 เข้าใช้งานผ่านลิงก์เว็บอินเทอร์เน็ต:\n"
+            "เข้าผ่าน https://quickconnect.to/dataft\n"
+            "👤 User: graphic\n"
+            "🔑 Pass: 0XEWb9&f\n\n"
+            "📶 หรือเข้าผ่านโครงข่าย Wi-Fi ออฟฟิศ:\n"
+            "สร้าง shortcut บล็อกพาร์ท: \\\\data_ft\n"
+            "👤 User: graphic\n"
+            "🔑 Pass: 0XEWb9&f"
+        )
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=nas_reply)]))
+        return
+
+    # 🌟 ฟังก์ชันคำสั่งพิเศษ 3: ขอ wifi
+    if msg.lower() == "ขอwifi":
+        wifi_reply = (
+            "📶 ข้อมูล Wi-Fi ออฟฟิศ\n\n"
+            "📛 ชื่อ Wi-Fi: FT_IT\n"
+            "🔑 รหัสผ่าน: 88888888"
+        )
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=wifi_reply)]))
+        return
+
+    # 🌟 ฟังก์ชันคำสั่งพิเศษ 4: ขอ tiktok
+    if msg.lower() == "ขอtiktok":
+        tiktok_reply = (
+            "🎬 ข้อมูลบัญชี TikTok ออฟฟิศ\n\n"
+            "👤 User: info1@fountaintreeresort.com\n"
+            "🔑 Pass: Farmmraf@2568"
+        )
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=tiktok_reply)]))
+        return
+
+    # 🌟 ฟังก์ชันคำสั่งพิเศษ 5: เบอร์หัวหน้า (เพิ่มใหม่ตรงนี้เลยแก)
+    if msg == "เบอร์หัวหน้า":
+        boss_reply = "โทร 083-0002507 Email:forzatoshiki@gmail.com"
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=boss_reply)]))
+        return
+
+    # ระบบบันทึกงานปกติ
     lines = msg.splitlines()
     if not lines or not (lines[0].startswith("แผนงานวันที่") or lines[0].startswith("สรุปงานวันที่")): return
 
@@ -205,7 +251,6 @@ def handle_message(event):
 
         if sheet_rows: sheet_instance.append_rows(sheet_rows)
 
-        # 🌟 แก้ไขตรงนี้: เพิ่มคำว่า "แผนงาน" นำหน้าวันที่ตามที่ต้องการ
         reply_text = f"✅ บันทึกแผนงานเรียบร้อย\n\n📅 แผนงานวันที่: {work_date}\n👤 จำนวนคน: {len(unique_names)} | 📝 จำนวนงาน: {len(sheet_rows)}\n"
         
         for d in ["กราฟฟิก", "การตลาด", "ไอที", "อื่น ๆ"]:
